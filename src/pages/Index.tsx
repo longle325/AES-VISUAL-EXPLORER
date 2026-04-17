@@ -4,10 +4,11 @@ import { InputPanel } from "@/components/InputPanel";
 import { StepWalker } from "@/components/StepWalker";
 import { OutputPanel } from "@/components/OutputPanel";
 import { DecryptionPanel } from "@/components/DecryptionPanel";
-import { encryptMessage, normalizeKey, toHex } from "@/lib/aes";
+import { encryptMessage, encryptBytes, normalizeKey, toHex } from "@/lib/aes";
 import { Github, Lock } from "lucide-react";
 
 type KeyBits = 128 | 192 | 256;
+type InputMode = "text" | "file";
 
 interface EncryptionResult {
   ciphertext: Uint8Array;
@@ -16,6 +17,9 @@ interface EncryptionResult {
   hex: string;
   keyText: string;
   bits: KeyBits;
+  isBinary: boolean;
+  fileName: string;
+  fileType: string;
 }
 
 const Index = () => {
@@ -24,19 +28,50 @@ const Index = () => {
   const [keyBits, setKeyBits] = useState<KeyBits>(128);
   const [result, setResult] = useState<EncryptionResult | null>(null);
 
+  const [inputMode, setInputMode] = useState<InputMode>("text");
+  const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
+  const [fileName, setFileName] = useState("");
+  const [fileSize, setFileSize] = useState(0);
+  const [fileType, setFileType] = useState("");
+
+  const handleFileLoaded = (data: Uint8Array, name: string, type: string) => {
+    setFileBytes(data);
+    setFileName(name);
+    setFileSize(data.length);
+    setFileType(type);
+  };
+
+  const handleFileClear = () => {
+    setFileBytes(null);
+    setFileName("");
+    setFileSize(0);
+    setFileType("");
+  };
+
   const handleEncrypt = () => {
     const key = normalizeKey(keyText, keyBits);
-    const { ciphertext, firstRun } = encryptMessage(plaintext, key);
-    const finalStep = firstRun.steps[firstRun.steps.length - 1];
+
+    let cipherResult: { ciphertext: Uint8Array; firstRun: ReturnType<typeof encryptMessage>["firstRun"] };
+
+    if (inputMode === "file" && fileBytes) {
+      cipherResult = encryptBytes(fileBytes, key);
+    } else {
+      cipherResult = encryptMessage(plaintext, key);
+    }
+
+    const finalStep = cipherResult.firstRun.steps[cipherResult.firstRun.steps.length - 1];
     setResult({
-      ciphertext,
+      ciphertext: cipherResult.ciphertext,
       finalState: finalStep.after,
-      run: firstRun,
-      hex: toHex(ciphertext),
+      run: cipherResult.firstRun,
+      hex: toHex(cipherResult.ciphertext),
       keyText,
       bits: keyBits,
+      isBinary: inputMode === "file",
+      fileName,
+      fileType,
     });
-    // Scroll to results
+
     setTimeout(() => {
       document.getElementById("results")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
@@ -54,7 +89,6 @@ const Index = () => {
       <Header />
 
       <div className="container py-10 md:py-16 space-y-10">
-        {/* Top: input + (output or placeholder) */}
         <section className="grid lg:grid-cols-2 gap-6">
           <InputPanel
             plaintext={plaintext}
@@ -64,10 +98,23 @@ const Index = () => {
             keyBits={keyBits}
             setKeyBits={setKeyBits}
             onEncrypt={handleEncrypt}
+            inputMode={inputMode}
+            setInputMode={setInputMode}
+            fileBytes={fileBytes}
+            fileName={fileName}
+            fileSize={fileSize}
+            fileType={fileType}
+            onFileLoaded={handleFileLoaded}
+            onFileClear={handleFileClear}
           />
 
           {result ? (
-            <OutputPanel ciphertext={result.ciphertext} finalState={result.finalState} />
+            <OutputPanel
+              ciphertext={result.ciphertext}
+              finalState={result.finalState}
+              isBinary={result.isBinary}
+              fileName={result.fileName}
+            />
           ) : (
             <div className="rounded-xl border border-dashed border-border bg-card/30 p-10 flex flex-col items-center justify-center text-center min-h-[300px]">
               <div className="w-14 h-14 rounded-xl bg-secondary/60 flex items-center justify-center mb-4 animate-pulse-glow">
@@ -75,13 +122,12 @@ const Index = () => {
               </div>
               <h3 className="font-semibold text-lg mb-1">Awaiting input</h3>
               <p className="text-sm text-muted-foreground max-w-xs">
-                Configure your key length, plaintext and secret key, then click <span className="text-primary font-mono">Encrypt</span> to begin the walkthrough.
+                Configure your key length, plaintext or file, and secret key, then click <span className="text-primary font-mono">Encrypt</span> to begin the walkthrough.
               </p>
             </div>
           )}
         </section>
 
-        {/* Step walker */}
         {result && (
           <section id="results" className="space-y-6 scroll-mt-8">
             {blockNote && (
@@ -93,7 +139,6 @@ const Index = () => {
           </section>
         )}
 
-        {/* Decryption */}
         <section>
           <DecryptionPanel
             initialCiphertext={result?.hex ?? ""}
@@ -102,7 +147,6 @@ const Index = () => {
           />
         </section>
 
-        {/* Footer */}
         <footer className="pt-10 mt-10 border-t border-border text-center text-xs text-muted-foreground font-mono space-y-2">
           <p>
             FIPS-197 reference implementation • S-box, key expansion, and GF(2⁸) MixColumns implemented from scratch for educational visualization.

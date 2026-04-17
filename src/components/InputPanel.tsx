@@ -5,10 +5,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, Play, KeyRound, FileText } from "lucide-react";
-import { padPlaintext, toHex } from "@/lib/aes";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Info, Play, KeyRound, FileText, Paperclip } from "lucide-react";
+import { padPlaintext, padBytes, toHex } from "@/lib/aes";
+import { FileUpload } from "@/components/FileUpload";
 
 type KeyBits = 128 | 192 | 256;
+type InputMode = "text" | "file";
 
 interface InputPanelProps {
   plaintext: string;
@@ -18,6 +21,14 @@ interface InputPanelProps {
   keyBits: KeyBits;
   setKeyBits: (b: KeyBits) => void;
   onEncrypt: () => void;
+  inputMode: InputMode;
+  setInputMode: (m: InputMode) => void;
+  fileBytes: Uint8Array | null;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  onFileLoaded: (data: Uint8Array, name: string, type: string) => void;
+  onFileClear: () => void;
 }
 
 const ROUND_INFO: Record<KeyBits, { rounds: number; bytes: number }> = {
@@ -27,15 +38,26 @@ const ROUND_INFO: Record<KeyBits, { rounds: number; bytes: number }> = {
 };
 
 export const InputPanel = (props: InputPanelProps) => {
-  const { plaintext, setPlaintext, keyText, setKeyText, keyBits, setKeyBits, onEncrypt } = props;
+  const {
+    plaintext, setPlaintext, keyText, setKeyText, keyBits, setKeyBits, onEncrypt,
+    inputMode, setInputMode, fileBytes, fileName, fileSize, fileType,
+    onFileLoaded, onFileClear,
+  } = props;
 
-  const blocks = useMemo(() => {
+  const textBlocks = useMemo(() => {
     if (!plaintext) return [];
     return padPlaintext(plaintext);
   }, [plaintext]);
 
+  const fileBlocks = useMemo(() => {
+    if (!fileBytes) return [];
+    return padBytes(fileBytes);
+  }, [fileBytes]);
+
+  const blocks = inputMode === "text" ? textBlocks : fileBlocks;
   const info = ROUND_INFO[keyBits];
   const keyBytesUsed = Math.min(new TextEncoder().encode(keyText).length, info.bytes);
+  const canEncrypt = inputMode === "text" ? !!plaintext && !!keyText : !!fileBytes && !!keyText;
 
   return (
     <Card className="bg-card/60 backdrop-blur border-border shadow-card">
@@ -81,25 +103,54 @@ export const InputPanel = (props: InputPanelProps) => {
           </div>
         </div>
 
-        {/* Plaintext */}
+        {/* Input mode tabs */}
         <div className="space-y-2">
-          <Label htmlFor="plaintext" className="font-mono uppercase text-xs tracking-widest">
-            Plaintext
-          </Label>
-          <Textarea
-            id="plaintext"
-            value={plaintext}
-            onChange={(e) => setPlaintext(e.target.value)}
-            placeholder="Enter the message to encrypt…"
-            className="font-mono min-h-[110px] resize-none bg-input/60"
-          />
+          <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as InputMode)}>
+            <TabsList className="grid grid-cols-2 w-48">
+              <TabsTrigger value="text" className="gap-1.5">
+                <FileText className="w-3.5 h-3.5" />
+                Text
+              </TabsTrigger>
+              <TabsTrigger value="file" className="gap-1.5">
+                <Paperclip className="w-3.5 h-3.5" />
+                File
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="text" className="mt-3 space-y-2">
+              <Label htmlFor="plaintext" className="font-mono uppercase text-xs tracking-widest">
+                Plaintext
+              </Label>
+              <Textarea
+                id="plaintext"
+                value={plaintext}
+                onChange={(e) => setPlaintext(e.target.value)}
+                placeholder="Enter the message to encrypt…"
+                className="font-mono min-h-[110px] resize-none bg-input/60"
+              />
+            </TabsContent>
+
+            <TabsContent value="file" className="mt-3">
+              <Label className="font-mono uppercase text-xs tracking-widest mb-2 block">
+                File Input
+              </Label>
+              <FileUpload
+                onFileLoaded={onFileLoaded}
+                onClear={onFileClear}
+                fileName={fileName || undefined}
+                fileSize={fileBytes ? fileSize : undefined}
+                fileType={fileType || undefined}
+              />
+            </TabsContent>
+          </Tabs>
+
           {blocks.length > 0 && (
             <div className="space-y-2 pt-2">
               <div className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
                 Divided into {blocks.length} block{blocks.length > 1 ? "s" : ""} of 128 bits (PKCS#7 padded)
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {blocks.map((b, i) => (
+                {blocks.slice(0, 16).map((b, i) => (
                   <div
                     key={i}
                     className="font-mono text-[10px] px-2 py-1.5 rounded-md bg-secondary/60 border border-border text-muted-foreground"
@@ -108,6 +159,11 @@ export const InputPanel = (props: InputPanelProps) => {
                     <span className="text-primary">#{i + 1}</span> {toHex(b, " ")}
                   </div>
                 ))}
+                {blocks.length > 16 && (
+                  <div className="font-mono text-[10px] px-2 py-1.5 rounded-md bg-secondary/60 border border-border text-muted-foreground">
+                    +{blocks.length - 16} more…
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -136,7 +192,7 @@ export const InputPanel = (props: InputPanelProps) => {
 
         <Button
           onClick={onEncrypt}
-          disabled={!plaintext || !keyText}
+          disabled={!canEncrypt}
           className="w-full bg-gradient-cipher text-primary-foreground font-semibold hover:opacity-90 shadow-glow transition-cipher"
           size="lg"
         >

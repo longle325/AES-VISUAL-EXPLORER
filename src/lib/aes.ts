@@ -445,6 +445,55 @@ export function decryptMessage(ciphertext: Uint8Array, key: Uint8Array): string 
   return unpadPlaintext(blocks);
 }
 
+export function padBytes(data: Uint8Array): Uint8Array[] {
+  const padLen = 16 - (data.length % 16);
+  const padded = new Uint8Array(data.length + padLen);
+  padded.set(data);
+  for (let i = data.length; i < padded.length; i++) padded[i] = padLen;
+  const blocks: Uint8Array[] = [];
+  for (let i = 0; i < padded.length; i += 16) blocks.push(padded.slice(i, i + 16));
+  return blocks;
+}
+
+export function encryptBytes(data: Uint8Array, key: Uint8Array): { ciphertext: Uint8Array; firstRun: CipherRun; blocks: Uint8Array[] } {
+  const blocks = padBytes(data);
+  const firstRun = encryptBlockWithSteps(blocks[0], key);
+  const cipherBlocks: Uint8Array[] = [firstRun.ciphertext];
+  for (let i = 1; i < blocks.length; i++) {
+    cipherBlocks.push(encryptBlockWithSteps(blocks[i], key).ciphertext);
+  }
+  const ciphertext = new Uint8Array(cipherBlocks.length * 16);
+  cipherBlocks.forEach((b, i) => ciphertext.set(b, i * 16));
+  return { ciphertext, firstRun, blocks };
+}
+
+export function decryptBytes(ciphertext: Uint8Array, key: Uint8Array): Uint8Array {
+  const blocks: Uint8Array[] = [];
+  for (let i = 0; i < ciphertext.length; i += 16) {
+    blocks.push(decryptBlock(ciphertext.slice(i, i + 16), key));
+  }
+  const total = new Uint8Array(blocks.length * 16);
+  blocks.forEach((b, i) => total.set(b, i * 16));
+  const padLen = total[total.length - 1];
+  if (padLen < 1 || padLen > 16) return total;
+  for (let i = total.length - padLen; i < total.length; i++) {
+    if (total[i] !== padLen) return total;
+  }
+  return total.slice(0, total.length - padLen);
+}
+
+export function isLikelyText(bytes: Uint8Array): boolean {
+  if (bytes.length === 0) return true;
+  const sample = bytes.length > 512 ? bytes.slice(0, 512) : bytes;
+  let printable = 0;
+  for (const b of sample) {
+    if ((b >= 0x20 && b <= 0x7e) || b === 0x09 || b === 0x0a || b === 0x0d || b >= 0x80) {
+      printable++;
+    }
+  }
+  return printable / sample.length > 0.85;
+}
+
 // Decrypt the full message and return the step-by-step run for block #1.
 export function decryptMessageWithSteps(
   ciphertext: Uint8Array,
