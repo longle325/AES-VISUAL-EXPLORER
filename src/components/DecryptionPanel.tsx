@@ -29,7 +29,7 @@ export const DecryptionPanel = ({ initialCiphertext = "", initialKey = "", initi
   const [cipherFileName, setCipherFileName] = useState("");
   const [cipherFileSize, setCipherFileSize] = useState(0);
   const [cipherFileType, setCipherFileType] = useState("");
-  const [keyText, setKeyText] = useState(initialKey);
+  const [keyText, setKeyText] = useState(initialKey || "MySecretKey12345");
   const [bits, setBits] = useState<KeyBits>(initialBits);
   const [output, setOutput] = useState<string | null>(null);
   const [outputBytes, setOutputBytes] = useState<Uint8Array | null>(null);
