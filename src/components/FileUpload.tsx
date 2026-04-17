@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Upload, X, FileText, FileArchive, Image, Music, AlertTriangle } from "lucide-react";
+import { Upload, X, FileText, FileArchive, Image, Music, AlertTriangle, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export const MAX_FILE_SIZE = 1024 * 1024;
@@ -9,6 +9,7 @@ export const ACCEPTED_EXTENSIONS: Record<string, string[]> = {
   "ZIP Archive": [".zip"],
   Image: [".png", ".jpg", ".jpeg", ".gif", ".webp"],
   Audio: [".mp3", ".wav", ".ogg"],
+  "Encrypted File": [".enc"],
 };
 
 const ALL_EXTENSIONS = Object.values(ACCEPTED_EXTENSIONS).flat();
@@ -33,6 +34,7 @@ function getCategoryIcon(category: string) {
     case "ZIP Archive": return <FileArchive className="w-5 h-5 text-yellow-400" />;
     case "Image": return <Image className="w-5 h-5 text-green-400" />;
     case "Audio": return <Music className="w-5 h-5 text-purple-400" />;
+    case "Encrypted File": return <Lock className="w-5 h-5 text-cyan-400" />;
     default: return <FileText className="w-5 h-5 text-muted-foreground" />;
   }
 }
