@@ -16,12 +16,17 @@ function diffIndices(a: Step["before"], b: Step["after"]): Set<number> {
 }
 
 const KIND_COLORS: Record<Step["kind"], string> = {
-  init: "from-cyan-400/80 to-cyan-600/80",
+  // Encryption
+  init:        "from-cyan-400/80 to-cyan-600/80",
   addRoundKey: "from-fuchsia-400/80 to-fuchsia-600/80",
-  subBytes: "from-amber-400/80 to-orange-500/80",
-  shiftRows: "from-lime-400/80 to-green-500/80",
-  mixColumns: "from-sky-400/80 to-indigo-500/80",
-  output: "from-primary to-accent",
+  subBytes:    "from-amber-400/80 to-orange-500/80",
+  shiftRows:   "from-lime-400/80 to-green-500/80",
+  mixColumns:  "from-sky-400/80 to-indigo-500/80",
+  output:      "from-primary to-accent",
+  // Decryption (inverse ops — warm counterparts)
+  invSubBytes:   "from-rose-400/80 to-red-500/80",
+  invShiftRows:  "from-teal-400/80 to-emerald-500/80",
+  invMixColumns: "from-violet-400/80 to-purple-500/80",
 };
 
 export const StepVisualizer = ({ step }: StepVisualizerProps) => {
@@ -64,7 +69,13 @@ export const StepVisualizer = ({ step }: StepVisualizerProps) => {
         <StateMatrix
           state={step.after}
           changed={changed}
-          label={step.kind === "init" ? "Initial State" : "After"}
+          label={
+            step.kind === "init"
+              ? "Initial State"
+              : step.kind === "output"
+              ? "Final State"
+              : "After"
+          }
         />
       </div>
     </div>

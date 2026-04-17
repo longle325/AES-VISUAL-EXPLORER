@@ -21,10 +21,6 @@ export const Header = () => (
         An interactive walkthrough of the Advanced Encryption Standard. Watch every byte of the
         State matrix transform across SubBytes, ShiftRows, MixColumns, and AddRoundKey.
       </p>
-      <div className="flex items-center gap-2 mt-6 text-xs text-muted-foreground font-mono">
-        <ShieldCheck className="w-4 h-4 text-accent" />
-        Educational implementation • ECB mode • Not for production use
-      </div>
     </div>
   </header>
 );

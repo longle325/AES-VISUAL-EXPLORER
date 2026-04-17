@@ -109,7 +109,6 @@ const Index = () => {
           </p>
           <p className="flex items-center justify-center gap-2">
             <Github className="w-3.5 h-3.5" />
-            Do not use this code for real encryption — use WebCrypto / OpenSSL.
           </p>
         </footer>
       </div>

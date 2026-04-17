@@ -132,7 +132,9 @@ export function expandKey(key: Uint8Array): State[] {
   return keys;
 }
 
-export type StepKind = 'init' | 'addRoundKey' | 'subBytes' | 'shiftRows' | 'mixColumns' | 'output';
+export type StepKind =
+  | 'init' | 'addRoundKey' | 'subBytes' | 'shiftRows' | 'mixColumns' | 'output'
+  | 'invSubBytes' | 'invShiftRows' | 'invMixColumns';
 
 export interface Step {
   kind: StepKind;
@@ -150,6 +152,13 @@ export interface CipherRun {
   steps: Step[];
   roundKeys: State[];
   ciphertext: Uint8Array;
+  Nr: number;
+}
+
+export interface DecipherRun {
+  steps: Step[];
+  roundKeys: State[];
+  plaintext: Uint8Array;
   Nr: number;
 }
 
@@ -265,6 +274,108 @@ export function decryptBlock(block: Uint8Array, key: Uint8Array): Uint8Array {
   return stateToBytes(state);
 }
 
+export function decryptBlockWithSteps(block: Uint8Array, key: Uint8Array): DecipherRun {
+  const roundKeys = expandKey(key);
+  const Nr = roundKeys.length - 1;
+  const steps: Step[] = [];
+
+  let state = bytesToState(block);
+  const initial = cloneState(state);
+
+  steps.push({
+    kind: 'init', round: Nr, totalRounds: Nr,
+    title: 'State Initialization (Ciphertext)',
+    description: 'The 16-byte ciphertext block is loaded into the 4×4 State matrix column-by-column. Decryption will peel back each transformation in reverse order.',
+    before: initial, after: initial,
+  });
+
+  let next = addRoundKey(state, roundKeys[Nr]);
+  steps.push({
+    kind: 'addRoundKey', round: Nr, totalRounds: Nr,
+    title: `Initial AddRoundKey (Key ${Nr})`,
+    description: `XOR the State with the last round key (K${Nr}). Since AES key schedule is the same for encryption and decryption, we simply consume round keys in reverse order.`,
+    before: state, after: next, roundKey: roundKeys[Nr],
+  });
+  state = next;
+
+  for (let r = Nr - 1; r >= 1; r--) {
+    const isFinal = r === 1;
+
+    next = shiftRows(state, true);
+    steps.push({
+      kind: 'invShiftRows', round: r, totalRounds: Nr,
+      title: `Round ${r} — InvShiftRows`,
+      description: 'Reverse of ShiftRows: row 1 shifted right by 1, row 2 by 2, row 3 by 3. Restores bytes to their pre-ShiftRows column positions.',
+      before: state, after: next, isFinalRound: isFinal,
+    });
+    state = next;
+
+    next = subBytes(state, true);
+    steps.push({
+      kind: 'invSubBytes', round: r, totalRounds: Nr,
+      title: `Round ${r} — InvSubBytes`,
+      description: 'Each byte is substituted using the inverse S-box: b → S⁻¹[b]. Reverses the non-linear confusion layer applied during encryption.',
+      before: state, after: next, isFinalRound: isFinal,
+    });
+    state = next;
+
+    next = addRoundKey(state, roundKeys[r]);
+    steps.push({
+      kind: 'addRoundKey', round: r, totalRounds: Nr,
+      title: `Round ${r} — AddRoundKey`,
+      description: `XOR with round key K${r}. XOR is its own inverse, so this directly undoes the AddRoundKey applied during encryption round ${r}.`,
+      before: state, after: next, roundKey: roundKeys[r], isFinalRound: isFinal,
+    });
+    state = next;
+
+    next = mixColumns(state, true);
+    steps.push({
+      kind: 'invMixColumns', round: r, totalRounds: Nr,
+      title: `Round ${r} — InvMixColumns`,
+      description: 'Each column is multiplied by the inverse MixColumns matrix over GF(2⁸). Reverses the linear diffusion step from encryption.',
+      before: state, after: next, isFinalRound: isFinal,
+    });
+    state = next;
+  }
+
+  // Final decryption round — no InvMixColumns
+  next = shiftRows(state, true);
+  steps.push({
+    kind: 'invShiftRows', round: 0, totalRounds: Nr,
+    title: 'Final Round — InvShiftRows',
+    description: "Undo the first encryption round's ShiftRows by shifting each row rightward.",
+    before: state, after: next, isFinalRound: true,
+  });
+  state = next;
+
+  next = subBytes(state, true);
+  steps.push({
+    kind: 'invSubBytes', round: 0, totalRounds: Nr,
+    title: 'Final Round — InvSubBytes',
+    description: 'Apply the inverse S-box to every byte. After this only the original AddRoundKey remains to undo.',
+    before: state, after: next, isFinalRound: true,
+  });
+  state = next;
+
+  next = addRoundKey(state, roundKeys[0]);
+  steps.push({
+    kind: 'addRoundKey', round: 0, totalRounds: Nr,
+    title: 'Final Round — AddRoundKey (Key 0)',
+    description: 'XOR with the original key (K0). This is the last step — the State now holds the original plaintext bytes.',
+    before: state, after: next, roundKey: roundKeys[0], isFinalRound: true,
+  });
+  state = next;
+
+  steps.push({
+    kind: 'output', round: 0, totalRounds: Nr,
+    title: 'Plaintext Output',
+    description: 'The recovered State matrix is read out column-by-column to produce the original 16-byte plaintext block.',
+    before: state, after: state,
+  });
+
+  return { steps, roundKeys, plaintext: stateToBytes(state), Nr };
+}
+
 // ---------- Helpers ----------
 
 export function toHex(bytes: Uint8Array | number[], sep = ''): string {
@@ -332,4 +443,18 @@ export function decryptMessage(ciphertext: Uint8Array, key: Uint8Array): string 
     blocks.push(decryptBlock(ciphertext.slice(i, i + 16), key));
   }
   return unpadPlaintext(blocks);
+}
+
+// Decrypt the full message and return the step-by-step run for block #1.
+export function decryptMessageWithSteps(
+  ciphertext: Uint8Array,
+  key: Uint8Array,
+): { plaintext: string; firstRun: DecipherRun; blockCount: number } {
+  const blockCount = ciphertext.length / 16;
+  const firstRun = decryptBlockWithSteps(ciphertext.slice(0, 16), key);
+  const blocks: Uint8Array[] = [firstRun.plaintext];
+  for (let i = 1; i < blockCount; i++) {
+    blocks.push(decryptBlock(ciphertext.slice(i * 16, (i + 1) * 16), key));
+  }
+  return { plaintext: unpadPlaintext(blocks), firstRun, blockCount };
 }

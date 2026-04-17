@@ -1,15 +1,21 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, FastForward, Rewind, Layers } from "lucide-react";
+import { ChevronLeft, ChevronRight, FastForward, Rewind, Layers, Unlock } from "lucide-react";
 import { StepVisualizer } from "./StepVisualizer";
-import type { CipherRun } from "@/lib/aes";
+import type { Step } from "@/lib/aes";
 
-interface StepWalkerProps {
-  run: CipherRun;
+interface AesRun {
+  steps: Step[];
+  Nr: number;
 }
 
-export const StepWalker = ({ run }: StepWalkerProps) => {
+interface StepWalkerProps {
+  run: AesRun;
+  mode?: "encrypt" | "decrypt";
+}
+
+export const StepWalker = ({ run, mode = "encrypt" }: StepWalkerProps) => {
   const [idx, setIdx] = useState(0);
   const step = run.steps[idx];
   const total = run.steps.length;
@@ -22,8 +28,10 @@ export const StepWalker = ({ run }: StepWalkerProps) => {
       <CardHeader>
         <CardTitle className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-xl">
-            <Layers className="w-5 h-5 text-primary" />
-            Step-by-Step Encryption
+            {mode === "decrypt"
+              ? <Unlock className="w-5 h-5 text-accent" />
+              : <Layers className="w-5 h-5 text-primary" />}
+            {mode === "decrypt" ? "Step-by-Step Decryption" : "Step-by-Step Encryption"}
           </div>
           <div className="font-mono text-xs text-muted-foreground">
             Step {idx + 1} / {total}
@@ -46,9 +54,9 @@ export const StepWalker = ({ run }: StepWalkerProps) => {
                 title={`Step ${t.i + 1}: ${run.steps[t.i].title}`}
                 className={`h-2.5 rounded-full transition-cipher ${
                   t.i === idx
-                    ? "w-8 bg-primary shadow-glow"
+                    ? `w-8 ${mode === "decrypt" ? "bg-accent shadow-glow" : "bg-primary shadow-glow"}`
                     : t.i < idx
-                    ? "w-3 bg-primary/50 hover:bg-primary/70"
+                    ? `w-3 ${mode === "decrypt" ? "bg-accent/50 hover:bg-accent/70" : "bg-primary/50 hover:bg-primary/70"}`
                     : "w-3 bg-border hover:bg-muted-foreground/40"
                 }`}
               />
@@ -71,7 +79,9 @@ export const StepWalker = ({ run }: StepWalkerProps) => {
               size="sm"
               onClick={() => setIdx(Math.min(total - 1, idx + 1))}
               disabled={idx === total - 1}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              className={mode === "decrypt"
+                ? "bg-accent text-accent-foreground hover:bg-accent/90"
+                : "bg-primary text-primary-foreground hover:bg-primary/90"}
             >
               Next <ChevronRight className="w-4 h-4 ml-1" />
             </Button>

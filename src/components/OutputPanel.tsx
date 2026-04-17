@@ -39,7 +39,6 @@ export const OutputPanel = ({ ciphertext, finalState }: OutputPanelProps) => {
           <StateMatrix state={finalState} label="Final State" />
           <div className="text-center">
             <div className="text-xs font-mono text-muted-foreground mb-1">read column-by-column →</div>
-            <div className="text-3xl">📤</div>
           </div>
           <StateMatrix state={bytesToState(ciphertext)} label="Output Bytes" />
         </div>

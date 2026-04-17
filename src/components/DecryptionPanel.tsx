@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Unlock, RotateCcw, AlertTriangle, ArrowRight } from "lucide-react";
-import { decryptMessage, fromHex, normalizeKey } from "@/lib/aes";
+import { decryptMessageWithSteps, fromHex, normalizeKey, type DecipherRun } from "@/lib/aes";
+import { StepWalker } from "@/components/StepWalker";
 import { useToast } from "@/hooks/use-toast";
 
 type KeyBits = 128 | 192 | 256;
@@ -21,6 +22,7 @@ export const DecryptionPanel = ({ initialCiphertext = "", initialKey = "", initi
   const [keyText, setKeyText] = useState(initialKey);
   const [bits, setBits] = useState<KeyBits>(initialBits);
   const [output, setOutput] = useState<string | null>(null);
+  const [decRun, setDecRun] = useState<{ run: DecipherRun; blockCount: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -32,15 +34,20 @@ export const DecryptionPanel = ({ initialCiphertext = "", initialKey = "", initi
   const handleDecrypt = () => {
     setError(null);
     setOutput(null);
+    setDecRun(null);
     try {
       const bytes = fromHex(cipherHex);
       if (bytes.length === 0 || bytes.length % 16 !== 0) {
         throw new Error("Ciphertext hex must decode to a multiple of 16 bytes.");
       }
       const key = normalizeKey(keyText, bits);
-      const plain = decryptMessage(bytes, key);
-      setOutput(plain);
-      toast({ title: "Decryption complete", description: `Recovered ${plain.length} characters.` });
+      const { plaintext, firstRun, blockCount } = decryptMessageWithSteps(bytes, key);
+      setOutput(plaintext);
+      setDecRun({ run: firstRun, blockCount });
+      toast({ title: "Decryption complete", description: `Recovered ${plaintext.length} characters.` });
+      setTimeout(() => {
+        document.getElementById("decrypt-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Decryption failed";
       setError(msg);
@@ -54,6 +61,7 @@ export const DecryptionPanel = ({ initialCiphertext = "", initialKey = "", initi
   };
 
   return (
+    <div className="space-y-6">
     <Card className="bg-card/60 backdrop-blur border-border shadow-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xl">
@@ -152,5 +160,17 @@ export const DecryptionPanel = ({ initialCiphertext = "", initialKey = "", initi
         )}
       </CardContent>
     </Card>
+
+    {decRun && (
+      <div id="decrypt-results" className="space-y-3 scroll-mt-8">
+        {decRun.blockCount > 1 && (
+          <div className="text-xs font-mono text-muted-foreground bg-secondary/40 border border-border rounded-lg p-3">
+            ℹ Showing the step-by-step walkthrough for block #1 of {decRun.blockCount}. All blocks share the same key schedule (ECB mode).
+          </div>
+        )}
+        <StepWalker run={decRun.run} mode="decrypt" />
+      </div>
+    )}
+    </div>
   );
 };
