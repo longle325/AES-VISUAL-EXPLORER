@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, FastForward, Rewind, Layers, Unlock } from "lucide-react";
+import { ChevronLeft, ChevronRight, FastForward, Rewind, Layers, Unlock, Play, Pause } from "lucide-react";
 import { StepVisualizer } from "./StepVisualizer";
 import type { Step } from "@/lib/aes";
 
@@ -15,12 +15,37 @@ interface StepWalkerProps {
   mode?: "encrypt" | "decrypt";
 }
 
+const AUTO_PLAY_MS = 500;
+
 export const StepWalker = ({ run, mode = "encrypt" }: StepWalkerProps) => {
   const [idx, setIdx] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
   const step = run.steps[idx];
   const total = run.steps.length;
 
-  // Group step indices by round for the timeline
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timer = setInterval(() => {
+      setIdx((prev) => {
+        if (prev >= total - 1) {
+          setIsPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, AUTO_PLAY_MS);
+    return () => clearInterval(timer);
+  }, [isPlaying, total]);
+
+  const togglePlay = () => {
+    if (idx >= total - 1) {
+      setIdx(0);
+      setIsPlaying(true);
+    } else {
+      setIsPlaying((prev) => !prev);
+    }
+  };
+
   const timeline = run.steps.map((s, i) => ({ round: s.round, kind: s.kind, i }));
 
   return (
@@ -50,7 +75,7 @@ export const StepWalker = ({ run, mode = "encrypt" }: StepWalkerProps) => {
             {timeline.map((t) => (
               <button
                 key={t.i}
-                onClick={() => setIdx(t.i)}
+                onClick={() => { setIdx(t.i); setIsPlaying(false); }}
                 title={`Step ${t.i + 1}: ${run.steps[t.i].title}`}
                 className={`h-2.5 rounded-full transition-cipher ${
                   t.i === idx
@@ -67,17 +92,27 @@ export const StepWalker = ({ run, mode = "encrypt" }: StepWalkerProps) => {
         {/* Controls */}
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setIdx(0)} disabled={idx === 0}>
+            <Button variant="outline" size="sm" onClick={() => { setIdx(0); setIsPlaying(false); }} disabled={idx === 0}>
               <Rewind className="w-4 h-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setIdx(Math.max(0, idx - 1))} disabled={idx === 0}>
+            <Button variant="outline" size="sm" onClick={() => { setIdx(Math.max(0, idx - 1)); setIsPlaying(false); }} disabled={idx === 0}>
               <ChevronLeft className="w-4 h-4 mr-1" /> Previous
             </Button>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={togglePlay}
+            className="gap-1.5"
+          >
+            {isPlaying
+              ? <><Pause className="w-4 h-4" /> Pause</>
+              : <><Play className="w-4 h-4" /> Play</>}
+          </Button>
           <div className="flex gap-2">
             <Button
               size="sm"
-              onClick={() => setIdx(Math.min(total - 1, idx + 1))}
+              onClick={() => { setIdx(Math.min(total - 1, idx + 1)); setIsPlaying(false); }}
               disabled={idx === total - 1}
               className={mode === "decrypt"
                 ? "bg-accent text-accent-foreground hover:bg-accent/90"
@@ -85,7 +120,7 @@ export const StepWalker = ({ run, mode = "encrypt" }: StepWalkerProps) => {
             >
               Next <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setIdx(total - 1)} disabled={idx === total - 1}>
+            <Button variant="outline" size="sm" onClick={() => { setIdx(total - 1); setIsPlaying(false); }} disabled={idx === total - 1}>
               <FastForward className="w-4 h-4" />
             </Button>
           </div>
