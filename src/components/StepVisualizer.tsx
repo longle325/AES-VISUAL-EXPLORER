@@ -10,7 +10,7 @@ interface StepVisualizerProps {
 function diffIndices(a: Step["before"], b: Step["after"]): Set<number> {
   const out = new Set<number>();
   for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
-    if (a[c][r] !== b[c][r]) out.add(c * 4 + r);
+    if (a[c][r] !== b[c][r]) out.add(r * 4 + c);
   }
   return out;
 }

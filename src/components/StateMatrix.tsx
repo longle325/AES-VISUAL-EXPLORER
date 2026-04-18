@@ -27,8 +27,8 @@ export const StateMatrix = ({ state, highlight, changed, label, size = "md", sho
       )}
       <div className="grid grid-cols-4 gap-1.5 p-3 rounded-xl bg-card/60 border border-border shadow-card">
         {Array.from({ length: 16 }).map((_, idx) => {
-          const col = Math.floor(idx / 4);
-          const row = idx % 4;
+          const row = Math.floor(idx / 4);
+          const col = idx % 4;
           const byte = state[col][row];
           const isHighlight = highlight?.has(idx);
           const isChanged = changed?.has(idx);
